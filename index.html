@@ -150,8 +150,9 @@ body {
 .board {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  width: min(80vw, 520px);
-  height: min(80vw, 520px);
+  grid-template-rows: repeat(8, 1fr);
+  width: min(calc(100vw - 72px), 520px);
+  aspect-ratio: 1;
   border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
@@ -314,12 +315,16 @@ body {
 .history-move .num { color: var(--text2); margin-right: 4px; }
 /* Responsive */
 @media (max-width: 600px) {
+  body { padding: 12px; }
   .header { flex-direction: column; gap: 12px; }
-  .player-bar { padding: 10px 14px; }
+  .player-bar { padding: 10px 14px; max-width: calc(100vw - 24px); }
   .player-avatar { width: 40px; height: 40px; font-size: 24px; }
   .player-timer { font-size: 20px; padding: 6px 12px; min-width: 80px; }
-  .piece { font-size: min(11vw, 48px); }
-  .board-wrapper { padding: 10px; }
+  .piece { font-size: calc((100vw - 72px) / 8 * 0.65); }
+  .board-wrapper { padding: 8px; max-width: calc(100vw - 24px); }
+  .board { width: min(calc(100vw - 40px), 520px); }
+  .history-panel { max-width: calc(100vw - 24px); }
+  .game-container { width: 100%; }
 }
 </style>
 </head>
