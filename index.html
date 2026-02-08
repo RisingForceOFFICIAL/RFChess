@@ -291,6 +291,76 @@ body {
 }
 .status-bar.check { color: var(--check-red); }
 .status-bar.win { color: var(--gold); font-size: 24px; }
+/* Main Menu */
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 0.4s;
+}
+.menu-overlay.hidden { opacity: 0; pointer-events: none; }
+.menu {
+  text-align: center;
+  max-width: 400px;
+  padding: 40px;
+}
+.menu-logo {
+  font-size: 3.5rem;
+  font-weight: 800;
+  letter-spacing: -2px;
+  margin-bottom: 8px;
+}
+.menu-logo span { color: var(--accent); }
+.menu-subtitle {
+  color: var(--text2);
+  font-size: 1rem;
+  margin-bottom: 32px;
+}
+.menu-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 28px;
+  background: var(--bg2);
+  border: 2px solid var(--bg3);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: left;
+}
+.menu-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(14,165,233,0.2);
+}
+.menu-icon { font-size: 2.5rem; }
+.menu-text { display: flex; flex-direction: column; gap: 4px; }
+.menu-text strong { font-size: 1.2rem; color: var(--text); }
+.menu-text small { font-size: 0.85rem; color: var(--text2); }
+.menu-difficulty { margin-top: 24px; }
+.difficulty-btns { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
+.diff-btn {
+  padding: 12px 24px;
+  background: var(--bg3);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.diff-btn:hover { border-color: var(--accent); background: var(--accent); color: #fff; }
 /* Modal */
 .modal-overlay {
   position: fixed;
@@ -454,6 +524,38 @@ body {
   </div>
 </div>
 
+<!-- Main Menu -->
+<div class="menu-overlay" id="main-menu">
+  <div class="menu">
+    <div class="menu-logo"><span>RF</span>Chess</div>
+    <div class="menu-subtitle">Choose your game mode</div>
+    <div class="menu-options">
+      <button class="menu-btn" onclick="startGame('local')">
+        <span class="menu-icon">👥</span>
+        <span class="menu-text">
+          <strong>Two Players</strong>
+          <small>Play against a friend locally</small>
+        </span>
+      </button>
+      <button class="menu-btn" onclick="startGame('bot')">
+        <span class="menu-icon">🤖</span>
+        <span class="menu-text">
+          <strong>vs Computer</strong>
+          <small>Challenge the AI</small>
+        </span>
+      </button>
+    </div>
+    <div class="menu-difficulty" id="difficulty-select" style="display:none;">
+      <div class="menu-subtitle">Select Difficulty</div>
+      <div class="difficulty-btns">
+        <button class="diff-btn" onclick="startWithDifficulty(1)">Easy</button>
+        <button class="diff-btn" onclick="startWithDifficulty(2)">Medium</button>
+        <button class="diff-btn" onclick="startWithDifficulty(3)">Hard</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Promotion Modal -->
 <div class="modal-overlay" id="promo-modal">
   <div class="modal promo-modal">
@@ -515,6 +617,9 @@ let timerInterval = null;
 let gameOver = false;
 let pendingPromotion = null;
 let captures = { w: [], b: [] };
+let gameMode = 'local'; // 'local' or 'bot'
+let botDifficulty = 2; // 1=easy, 2=medium, 3=hard
+let botThinking = false;
 
 const $board = document.getElementById('board');
 const $status = document.getElementById('status');
@@ -530,6 +635,8 @@ const $promopieces = document.getElementById('promo-pieces');
 const $gameoverModal = document.getElementById('gameover-modal');
 const $gameoverTitle = document.getElementById('gameover-title');
 const $gameoverMsg = document.getElementById('gameover-msg');
+const $mainMenu = document.getElementById('main-menu');
+const $diffSelect = document.getElementById('difficulty-select');
 
 // Initialize
 function initBoard() {
@@ -547,6 +654,29 @@ function initBoard() {
 }
 
 function newGame() {
+  // Show main menu
+  $mainMenu.classList.remove('hidden');
+  $diffSelect.style.display = 'none';
+  clearInterval(timerInterval);
+}
+
+function startGame(mode) {
+  if (mode === 'bot') {
+    // Show difficulty selection
+    $diffSelect.style.display = 'block';
+    return;
+  }
+  gameMode = mode;
+  beginGame();
+}
+
+function startWithDifficulty(diff) {
+  gameMode = 'bot';
+  botDifficulty = diff;
+  beginGame();
+}
+
+function beginGame() {
   initBoard();
   turn = 'w';
   selected = null;
@@ -559,11 +689,13 @@ function newGame() {
   whiteTime = 600;
   blackTime = 600;
   gameOver = false;
+  botThinking = false;
   captures = { w: [], b: [] };
   clearInterval(timerInterval);
   timerInterval = setInterval(updateTimers, 1000);
   $gameoverModal.classList.remove('active');
   $promoModal.classList.remove('active');
+  $mainMenu.classList.add('hidden');
   render();
   updateStatus();
 }
@@ -753,6 +885,7 @@ function makeMove(move) {
   legalMoves = [];
   render();
   updateStatus();
+  triggerBotMove();
 }
 
 function showPromotion(color) {
@@ -782,6 +915,7 @@ function promote(piece) {
   turn = turn === 'w' ? 'b' : 'w';
   render();
   updateStatus();
+  triggerBotMove();
 }
 
 function recordMove(piece, fr, fc, tr, tc, isCapture, castle, promo) {
@@ -1106,6 +1240,223 @@ document.addEventListener('click', (e) => {
     document.getElementById('theme-picker').classList.remove('open');
   }
 });
+
+// AI Bot Logic
+function triggerBotMove() {
+  if (gameMode !== 'bot' || turn !== 'b' || gameOver || botThinking) return;
+  botThinking = true;
+  $status.textContent = 'Bot is thinking...';
+  setTimeout(() => {
+    const move = getBotMove();
+    if (move) {
+      selected = { r: move.fr, c: move.fc };
+      legalMoves = getLegalMoves(move.fr, move.fc);
+      makeMove(move);
+    }
+    botThinking = false;
+  }, 300 + Math.random() * 400); // Small delay for realism
+}
+
+function getBotMove() {
+  const depth = botDifficulty; // 1, 2, or 3
+  const moves = getAllMoves('b');
+  if (moves.length === 0) return null;
+  
+  let bestMove = null;
+  let bestScore = -Infinity;
+  
+  for (const move of moves) {
+    const score = evaluateMove(move, depth);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
+  }
+  
+  // Add randomness for easy mode
+  if (botDifficulty === 1 && Math.random() < 0.3) {
+    return moves[Math.floor(Math.random() * moves.length)];
+  }
+  
+  return bestMove;
+}
+
+function evaluateMove(move, depth) {
+  // Simulate the move
+  const backup = simulateMove(move);
+  let score = -minimax(depth - 1, -Infinity, Infinity, true);
+  restoreMove(backup);
+  return score;
+}
+
+function minimax(depth, alpha, beta, isMaximizing) {
+  if (depth === 0) return evaluateBoard();
+  
+  const color = isMaximizing ? 'w' : 'b';
+  const moves = getAllMoves(color);
+  
+  if (moves.length === 0) {
+    // Check if it's checkmate or stalemate
+    if (isInCheck(color)) {
+      return isMaximizing ? -10000 : 10000;
+    }
+    return 0; // Stalemate
+  }
+  
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const backup = simulateMove(move);
+      const eval_ = minimax(depth - 1, alpha, beta, false);
+      restoreMove(backup);
+      maxEval = Math.max(maxEval, eval_);
+      alpha = Math.max(alpha, eval_);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of moves) {
+      const backup = simulateMove(move);
+      const eval_ = minimax(depth - 1, alpha, beta, true);
+      restoreMove(backup);
+      minEval = Math.min(minEval, eval_);
+      beta = Math.min(beta, eval_);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
+function evaluateBoard() {
+  let score = 0;
+  const pieceValues = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+  
+  // Position bonuses (center control, etc.)
+  const pawnTable = [
+    [0,0,0,0,0,0,0,0],
+    [50,50,50,50,50,50,50,50],
+    [10,10,20,30,30,20,10,10],
+    [5,5,10,25,25,10,5,5],
+    [0,0,0,20,20,0,0,0],
+    [5,-5,-10,0,0,-10,-5,5],
+    [5,10,10,-20,-20,10,10,5],
+    [0,0,0,0,0,0,0,0]
+  ];
+  
+  const knightTable = [
+    [-50,-40,-30,-30,-30,-30,-40,-50],
+    [-40,-20,0,0,0,0,-20,-40],
+    [-30,0,10,15,15,10,0,-30],
+    [-30,5,15,20,20,15,5,-30],
+    [-30,0,15,20,20,15,0,-30],
+    [-30,5,10,15,15,10,5,-30],
+    [-40,-20,0,5,5,0,-20,-40],
+    [-50,-40,-30,-30,-30,-30,-40,-50]
+  ];
+  
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (piece === '.') continue;
+      
+      const isWhite = piece === piece.toUpperCase();
+      const type = piece.toLowerCase();
+      const value = pieceValues[type] || 0;
+      const posBonus = type === 'p' ? pawnTable[isWhite ? r : 7-r][c] :
+                       type === 'n' ? knightTable[isWhite ? r : 7-r][c] : 0;
+      
+      if (isWhite) {
+        score += value + posBonus;
+      } else {
+        score -= value + posBonus;
+      }
+    }
+  }
+  
+  return score;
+}
+
+function getAllMoves(color) {
+  const moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (piece === '.') continue;
+      const isWhite = piece === piece.toUpperCase();
+      if ((color === 'w' && isWhite) || (color === 'b' && !isWhite)) {
+        const pieceMoves = getLegalMoves(r, c);
+        pieceMoves.forEach(m => moves.push({ fr: r, fc: c, tr: m.r, tc: m.c, ...m }));
+      }
+    }
+  }
+  return moves;
+}
+
+function simulateMove(move) {
+  const { fr, fc, tr, tc } = move;
+  const backup = {
+    from: board[fr][fc],
+    to: board[tr][tc],
+    fr, fc, tr, tc,
+    castling: { ...castling },
+    enPassant,
+    epCapture: null
+  };
+  
+  const piece = board[fr][fc];
+  
+  // Handle en passant capture
+  if (piece.toLowerCase() === 'p' && tc !== fc && board[tr][tc] === '.') {
+    const epR = piece === piece.toUpperCase() ? tr + 1 : tr - 1;
+    backup.epCapture = { r: epR, c: tc, piece: board[epR][tc] };
+    board[epR][tc] = '.';
+  }
+  
+  // Handle castling
+  if (piece.toLowerCase() === 'k' && Math.abs(tc - fc) === 2) {
+    if (tc > fc) { // Kingside
+      backup.rookFrom = { r: fr, c: 7, piece: board[fr][7] };
+      backup.rookTo = { r: fr, c: 5, piece: board[fr][5] };
+      board[fr][5] = board[fr][7];
+      board[fr][7] = '.';
+    } else { // Queenside
+      backup.rookFrom = { r: fr, c: 0, piece: board[fr][0] };
+      backup.rookTo = { r: fr, c: 3, piece: board[fr][3] };
+      board[fr][3] = board[fr][0];
+      board[fr][0] = '.';
+    }
+  }
+  
+  board[tr][tc] = piece;
+  board[fr][fc] = '.';
+  
+  // Handle promotion (always queen for bot)
+  if (piece.toLowerCase() === 'p' && (tr === 0 || tr === 7)) {
+    board[tr][tc] = piece === 'P' ? 'Q' : 'q';
+    backup.promo = true;
+  }
+  
+  return backup;
+}
+
+function restoreMove(backup) {
+  const { fr, fc, tr, tc, from, to } = backup;
+  board[fr][fc] = from;
+  board[tr][tc] = to;
+  
+  if (backup.epCapture) {
+    board[backup.epCapture.r][backup.epCapture.c] = backup.epCapture.piece;
+  }
+  
+  if (backup.rookFrom) {
+    board[backup.rookFrom.r][backup.rookFrom.c] = backup.rookFrom.piece;
+    board[backup.rookTo.r][backup.rookTo.c] = backup.rookTo.piece;
+  }
+  
+  castling = backup.castling;
+  enPassant = backup.enPassant;
+}
 
 // Start
 newGame();
