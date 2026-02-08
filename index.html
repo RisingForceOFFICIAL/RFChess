@@ -29,6 +29,13 @@
   --text: #111;
   --text2: #555;
 }
+/* Board Color Themes */
+.board-theme-classic { --light-sq: #e8d4b8; --dark-sq: #b58863; --light-sq-hl: #f6f089; --dark-sq-hl: #d4c34d; }
+.board-theme-ocean { --light-sq: #d4e5f7; --dark-sq: #4a90c2; --light-sq-hl: #89d4f0; --dark-sq-hl: #2d7ab8; }
+.board-theme-forest { --light-sq: #e0e8d0; --dark-sq: #6b8e4e; --light-sq-hl: #c8f089; --dark-sq-hl: #4a7a2d; }
+.board-theme-coral { --light-sq: #f5e6e0; --dark-sq: #c97b63; --light-sq-hl: #f0c889; --dark-sq-hl: #b85a40; }
+.board-theme-midnight { --light-sq: #c8c8d0; --dark-sq: #4a4a5e; --light-sq-hl: #a0a0f0; --dark-sq-hl: #3a3a7a; }
+.board-theme-neon { --light-sq: #1a1a2e; --dark-sq: #0f0f1a; --light-sq-hl: #0ea5e9; --dark-sq-hl: #0284c7; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { overflow-x: hidden; width: 100%; max-width: 100vw; }
 body {
@@ -62,6 +69,45 @@ body {
   display: flex;
   gap: 10px;
 }
+.theme-picker {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: var(--bg2);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 180px;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.theme-picker.open { display: flex; }
+.theme-option {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+.theme-option:hover { transform: scale(1.1); border-color: var(--accent); }
+.theme-option.active { border-color: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.theme-preview {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.theme-preview span:nth-child(1) { grid-area: 1/1/2/2; }
+.theme-preview span:nth-child(2) { grid-area: 1/2/2/3; }
+.theme-preview span:nth-child(1)::after { content: ''; display: block; width: 100%; height: 100%; }
+.header { position: relative; }
 .btn {
   background: var(--bg3);
   border: 1px solid rgba(255,255,255,0.1);
@@ -364,7 +410,16 @@ body {
   <div class="controls">
     <button class="btn" onclick="newGame()">New Game</button>
     <button class="btn" onclick="undoMove()">Undo</button>
+    <button class="btn btn-icon" onclick="toggleBoardTheme()" title="Board Theme">🎨</button>
     <button class="btn btn-icon" onclick="toggleTheme()">🌙</button>
+  </div>
+  <div class="theme-picker" id="theme-picker">
+    <div class="theme-option" data-theme="classic" title="Classic"><div class="theme-preview"><span style="background:#e8d4b8"></span><span style="background:#b58863"></span><span style="background:#b58863"></span><span style="background:#e8d4b8"></span></div></div>
+    <div class="theme-option" data-theme="ocean" title="Ocean"><div class="theme-preview"><span style="background:#d4e5f7"></span><span style="background:#4a90c2"></span><span style="background:#4a90c2"></span><span style="background:#d4e5f7"></span></div></div>
+    <div class="theme-option" data-theme="forest" title="Forest"><div class="theme-preview"><span style="background:#e0e8d0"></span><span style="background:#6b8e4e"></span><span style="background:#6b8e4e"></span><span style="background:#e0e8d0"></span></div></div>
+    <div class="theme-option" data-theme="coral" title="Coral"><div class="theme-preview"><span style="background:#f5e6e0"></span><span style="background:#c97b63"></span><span style="background:#c97b63"></span><span style="background:#f5e6e0"></span></div></div>
+    <div class="theme-option" data-theme="midnight" title="Midnight"><div class="theme-preview"><span style="background:#c8c8d0"></span><span style="background:#4a4a5e"></span><span style="background:#4a4a5e"></span><span style="background:#c8c8d0"></span></div></div>
+    <div class="theme-option" data-theme="neon" title="Neon"><div class="theme-preview"><span style="background:#1a1a2e"></span><span style="background:#0f0f1a"></span><span style="background:#0f0f1a"></span><span style="background:#1a1a2e"></span></div></div>
   </div>
 </div>
 
@@ -1009,9 +1064,48 @@ function updateTimers() {
 
 function toggleTheme() {
   document.body.classList.toggle('light-theme');
-  const btn = document.querySelector('.btn-icon');
-  btn.textContent = document.body.classList.contains('light-theme') ? '☀️' : '🌙';
+  const btns = document.querySelectorAll('.btn-icon');
+  const themeBtn = btns[btns.length - 1]; // Last btn-icon is the light/dark toggle
+  themeBtn.textContent = document.body.classList.contains('light-theme') ? '☀️' : '🌙';
 }
+
+// Board theme picker
+var currentBoardTheme = localStorage.getItem('rfchess-board-theme') || 'classic';
+
+function toggleBoardTheme() {
+  document.getElementById('theme-picker').classList.toggle('open');
+}
+
+function setBoardTheme(theme) {
+  // Remove all board theme classes
+  document.body.classList.remove('board-theme-classic', 'board-theme-ocean', 'board-theme-forest', 'board-theme-coral', 'board-theme-midnight', 'board-theme-neon');
+  document.body.classList.add('board-theme-' + theme);
+  currentBoardTheme = theme;
+  localStorage.setItem('rfchess-board-theme', theme);
+  // Update active state
+  document.querySelectorAll('.theme-option').forEach(opt => {
+    opt.classList.toggle('active', opt.dataset.theme === theme);
+  });
+  document.getElementById('theme-picker').classList.remove('open');
+}
+
+// Initialize theme picker
+document.querySelectorAll('.theme-option').forEach(opt => {
+  opt.addEventListener('click', () => setBoardTheme(opt.dataset.theme));
+});
+
+// Load saved theme
+document.body.classList.add('board-theme-' + currentBoardTheme);
+document.querySelectorAll('.theme-option').forEach(opt => {
+  opt.classList.toggle('active', opt.dataset.theme === currentBoardTheme);
+});
+
+// Close picker when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.theme-picker') && !e.target.closest('[onclick*="toggleBoardTheme"]')) {
+    document.getElementById('theme-picker').classList.remove('open');
+  }
+});
 
 // Start
 newGame();
