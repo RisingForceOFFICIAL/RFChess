@@ -264,6 +264,21 @@ body {
   filter: drop-shadow(4px 8px 12px rgba(0,0,0,0.5));
   z-index: 100;
 }
+.piece.animating {
+  position: absolute;
+  transition: left 0.2s ease-out, top 0.2s ease-out;
+  pointer-events: none;
+  z-index: 50;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+.board-wrapper.shake { animation: shake 0.5s ease-in-out; }
+.board.flipped { transform: rotate(180deg); }
+.board.flipped .piece { transform: rotate(180deg); }
+.board.flipped .coord { transform: rotate(180deg); }
 .move-hint {
   position: absolute;
   border-radius: 50%;
@@ -478,8 +493,11 @@ body {
 <div class="header">
   <div class="logo"><span>RF</span>Chess</div>
   <div class="controls">
-    <button class="btn" onclick="newGame()">New Game</button>
+    <button class="btn" onclick="newGame()">Menu</button>
+    <button class="btn" onclick="rematch()" id="rematch-btn" style="display:none;">Rematch</button>
     <button class="btn" onclick="undoMove()">Undo</button>
+    <button class="btn btn-icon" onclick="flipBoard()" title="Flip Board">🔄</button>
+    <button class="btn btn-icon" onclick="resign()" title="Resign" id="resign-btn">🏳️</button>
     <button class="btn btn-icon" onclick="toggleBoardTheme()" title="Board Theme">🎨</button>
     <button class="btn btn-icon" onclick="toggleTheme()">🌙</button>
   </div>
@@ -548,9 +566,16 @@ body {
     <div class="menu-difficulty" id="difficulty-select" style="display:none;">
       <div class="menu-subtitle">Select Difficulty</div>
       <div class="difficulty-btns">
-        <button class="diff-btn" onclick="startWithDifficulty(1)">Easy</button>
-        <button class="diff-btn" onclick="startWithDifficulty(2)">Medium</button>
-        <button class="diff-btn" onclick="startWithDifficulty(3)">Hard</button>
+        <button class="diff-btn" onclick="selectDifficulty(1)">Easy</button>
+        <button class="diff-btn" onclick="selectDifficulty(2)">Medium</button>
+        <button class="diff-btn" onclick="selectDifficulty(3)">Hard</button>
+      </div>
+    </div>
+    <div class="menu-color" id="color-select" style="display:none;">
+      <div class="menu-subtitle">Play as</div>
+      <div class="difficulty-btns">
+        <button class="diff-btn" onclick="startWithColor('w')">⬜ White</button>
+        <button class="diff-btn" onclick="startWithColor('b')">⬛ Black</button>
       </div>
     </div>
   </div>
@@ -620,6 +645,65 @@ let captures = { w: [], b: [] };
 let gameMode = 'local'; // 'local' or 'bot'
 let botDifficulty = 2; // 1=easy, 2=medium, 3=hard
 let botThinking = false;
+let playerColor = 'w'; // Player's color when vs bot
+let boardFlipped = false;
+let lastGameSettings = { mode: 'local', difficulty: 2, color: 'w' };
+
+// Audio context for sounds
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playSound(type) {
+  initAudio();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  if (type === 'move') {
+    osc.frequency.value = 200;
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialDecayTo && gain.gain.exponentialDecayTo(0.01, audioCtx.currentTime + 0.1);
+    osc.type = 'sine';
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.08);
+  } else if (type === 'capture') {
+    osc.frequency.value = 150;
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    osc.type = 'triangle';
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+  } else if (type === 'check') {
+    osc.frequency.value = 440;
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    osc.type = 'square';
+    osc.start();
+    setTimeout(() => { osc.frequency.value = 550; }, 80);
+    osc.stop(audioCtx.currentTime + 0.2);
+  } else if (type === 'castle') {
+    osc.frequency.value = 180;
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    osc.type = 'sine';
+    osc.start();
+    setTimeout(() => {
+      const osc2 = audioCtx.createOscillator();
+      osc2.connect(gain);
+      osc2.frequency.value = 220;
+      osc2.start();
+      osc2.stop(audioCtx.currentTime + 0.1);
+    }, 100);
+    osc.stop(audioCtx.currentTime + 0.1);
+  } else if (type === 'gameover') {
+    osc.frequency.value = 300;
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    osc.type = 'sawtooth';
+    osc.start();
+    setTimeout(() => { osc.frequency.value = 200; }, 150);
+    setTimeout(() => { osc.frequency.value = 150; }, 300);
+    osc.stop(audioCtx.currentTime + 0.5);
+  }
+}
 
 const $board = document.getElementById('board');
 const $status = document.getElementById('status');
@@ -662,17 +746,27 @@ function newGame() {
 
 function startGame(mode) {
   if (mode === 'bot') {
-    // Show difficulty selection
     $diffSelect.style.display = 'block';
+    document.getElementById('color-select').style.display = 'none';
     return;
   }
   gameMode = mode;
+  playerColor = 'w';
+  lastGameSettings = { mode, difficulty: botDifficulty, color: 'w' };
   beginGame();
 }
 
-function startWithDifficulty(diff) {
-  gameMode = 'bot';
+function selectDifficulty(diff) {
   botDifficulty = diff;
+  $diffSelect.style.display = 'none';
+  document.getElementById('color-select').style.display = 'block';
+}
+
+function startWithColor(color) {
+  gameMode = 'bot';
+  playerColor = color;
+  boardFlipped = (color === 'b');
+  lastGameSettings = { mode: 'bot', difficulty: botDifficulty, color };
   beginGame();
 }
 
@@ -696,8 +790,26 @@ function beginGame() {
   $gameoverModal.classList.remove('active');
   $promoModal.classList.remove('active');
   $mainMenu.classList.add('hidden');
+  
+  // Update board flip
+  const $boardEl = document.getElementById('board');
+  if (boardFlipped) {
+    $boardEl.classList.add('flipped');
+  } else {
+    $boardEl.classList.remove('flipped');
+  }
+  
+  // Show rematch button, hide resign until game starts
+  document.getElementById('rematch-btn').style.display = 'inline-block';
+  document.getElementById('resign-btn').style.display = 'inline-block';
+  
   render();
   updateStatus();
+  
+  // If playing as black vs bot, bot moves first
+  if (gameMode === 'bot' && playerColor === 'b') {
+    triggerBotMove();
+  }
 }
 
 function render() {
@@ -883,6 +995,16 @@ function makeMove(move) {
   turn = turn === 'w' ? 'b' : 'w';
   selected = null;
   legalMoves = [];
+  
+  // Play sound
+  if (move.castle) {
+    playSound('castle');
+  } else if (captured !== '.' || move.enPassant) {
+    playSound('capture');
+  } else {
+    playSound('move');
+  }
+  
   render();
   updateStatus();
   triggerBotMove();
@@ -1142,14 +1264,18 @@ function updateStatus() {
     const winner = turn === 'w' ? 'Black' : 'White';
     $status.textContent = 'Checkmate! ' + winner + ' wins!';
     $status.className = 'status-bar win';
+    playSound('gameover');
+    shakeBoard();
     endGame('Checkmate!', winner + ' wins by checkmate');
   } else if (isStalemate(turn)) {
     $status.textContent = 'Stalemate! Draw.';
     $status.className = 'status-bar';
+    playSound('gameover');
     endGame('Stalemate!', 'The game is a draw');
   } else if (isInCheck(turn)) {
     $status.textContent = (turn === 'w' ? 'White' : 'Black') + ' is in check!';
     $status.className = 'status-bar check';
+    playSound('check');
   } else {
     $status.textContent = (turn === 'w' ? 'White' : 'Black') + ' to move';
     $status.className = 'status-bar';
@@ -1194,6 +1320,38 @@ function updateTimers() {
   } else if (blackTime <= 0) {
     endGame('Time Out!', 'White wins on time');
   }
+}
+
+function flipBoard() {
+  boardFlipped = !boardFlipped;
+  const $boardEl = document.getElementById('board');
+  $boardEl.classList.toggle('flipped', boardFlipped);
+}
+
+function resign() {
+  if (gameOver || !history.length) return;
+  const winner = turn === 'w' ? 'Black' : 'White';
+  gameOver = true;
+  clearInterval(timerInterval);
+  playSound('gameover');
+  shakeBoard();
+  $gameoverTitle.textContent = 'Resigned';
+  $gameoverMsg.textContent = `${winner} wins by resignation`;
+  $gameoverModal.classList.add('active');
+}
+
+function rematch() {
+  gameMode = lastGameSettings.mode;
+  botDifficulty = lastGameSettings.difficulty;
+  playerColor = lastGameSettings.color;
+  boardFlipped = (lastGameSettings.mode === 'bot' && lastGameSettings.color === 'b');
+  beginGame();
+}
+
+function shakeBoard() {
+  const wrapper = document.querySelector('.board-wrapper');
+  wrapper.classList.add('shake');
+  setTimeout(() => wrapper.classList.remove('shake'), 500);
 }
 
 function toggleTheme() {
@@ -1243,11 +1401,12 @@ document.addEventListener('click', (e) => {
 
 // AI Bot Logic
 function triggerBotMove() {
-  if (gameMode !== 'bot' || turn !== 'b' || gameOver || botThinking) return;
+  const botColor = playerColor === 'w' ? 'b' : 'w';
+  if (gameMode !== 'bot' || turn !== botColor || gameOver || botThinking) return;
   botThinking = true;
   $status.textContent = 'Bot is thinking...';
   setTimeout(() => {
-    const move = getBotMove();
+    const move = getBotMove(botColor);
     if (move) {
       selected = { r: move.fr, c: move.fc };
       legalMoves = getLegalMoves(move.fr, move.fc);
@@ -1257,16 +1416,17 @@ function triggerBotMove() {
   }, 300 + Math.random() * 400); // Small delay for realism
 }
 
-function getBotMove() {
+function getBotMove(botColor) {
   const depth = botDifficulty; // 1, 2, or 3
-  const moves = getAllMoves('b');
+  const moves = getAllMoves(botColor);
   if (moves.length === 0) return null;
   
   let bestMove = null;
   let bestScore = -Infinity;
+  const isWhiteBot = botColor === 'w';
   
   for (const move of moves) {
-    const score = evaluateMove(move, depth);
+    const score = evaluateMoveForColor(move, depth, isWhiteBot);
     if (score > bestScore) {
       bestScore = score;
       bestMove = move;
@@ -1281,10 +1441,14 @@ function getBotMove() {
   return bestMove;
 }
 
-function evaluateMove(move, depth) {
-  // Simulate the move
+function evaluateMoveForColor(move, depth, isWhiteBot) {
   const backup = simulateMove(move);
-  let score = -minimax(depth - 1, -Infinity, Infinity, true);
+  let score;
+  if (isWhiteBot) {
+    score = minimax(depth - 1, -Infinity, Infinity, false); // Bot is white, maximizing
+  } else {
+    score = -minimax(depth - 1, -Infinity, Infinity, true); // Bot is black, minimizing
+  }
   restoreMove(backup);
   return score;
 }
