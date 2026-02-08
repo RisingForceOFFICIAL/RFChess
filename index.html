@@ -537,20 +537,56 @@ body {
 .history-move .num { color: var(--text2); margin-right: 4px; }
 /* Responsive */
 @media (max-width: 600px) {
-  body { padding: 10px; }
-  .header { flex-direction: column; gap: 10px; width: 100%; }
+  body { padding: 8px; justify-content: flex-start; padding-top: 16px; }
+  .header { flex-direction: column; gap: 12px; width: 100%; position: relative; }
+  .logo { font-size: 1.5rem; }
+  .controls { flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .btn { padding: 8px 12px; font-size: 12px; }
+  .btn-icon { padding: 8px 10px; font-size: 16px; }
   .player-bar { padding: 8px 12px; width: 100%; max-width: none; }
-  .player-avatar { width: 36px; height: 36px; font-size: 22px; }
-  .player-timer { font-size: 18px; padding: 6px 10px; min-width: 70px; }
-  .piece { width: 80%; height: 80%; }
-  .board-wrapper { padding: 6px; max-width: none; width: calc(100vw - 20px); }
+  .player-avatar { width: 32px; height: 32px; font-size: 18px; }
+  .player-name { font-size: 14px; }
+  .player-timer { font-size: 16px; padding: 4px 8px; min-width: 60px; }
+  .piece { width: 85%; height: 85%; }
+  .board-wrapper { padding: 6px; max-width: none; width: calc(100vw - 16px); }
   .board { 
-    --board-size: calc(100vw - 32px);
+    --board-size: calc(100vw - 28px);
     width: var(--board-size);
     height: var(--board-size);
   }
-  .history-panel { width: 100%; max-width: none; }
-  .game-container { width: 100%; }
+  .square .coord { font-size: 9px; }
+  .history-panel { width: 100%; max-width: none; display: none; }
+  .game-container { width: 100%; gap: 12px; }
+  .status-bar { font-size: 14px; padding: 10px 16px; }
+  /* Mobile pickers - full width bottom sheet style */
+  .theme-picker, .piece-picker {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 60vh;
+    border-radius: 20px 20px 0 0;
+    padding: 20px;
+    margin: 0;
+  }
+  .theme-picker { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .theme-option { width: 56px; height: 56px; }
+  .piece-picker { max-height: 70vh; }
+  .picker-section { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .picker-label { width: 100%; }
+  .piece-style-option, .piece-color-option { padding: 10px 14px; font-size: 14px; }
+  /* Mobile menu */
+  .menu { padding: 24px; }
+  .menu-logo { font-size: 2.5rem; }
+  .menu-btn { padding: 16px 20px; }
+  .menu-icon { font-size: 2rem; }
+  .menu-text strong { font-size: 1.1rem; }
+  .diff-btn { padding: 14px 20px; font-size: 15px; }
+  /* Modals */
+  .modal { width: 90%; padding: 24px; }
+  .promo-piece { width: 60px; height: 60px; }
 }
 </style>
 </head>
