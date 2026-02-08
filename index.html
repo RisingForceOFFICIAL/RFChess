@@ -125,22 +125,33 @@ body {
   flex-direction: column;
   z-index: 100;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  max-height: 400px;
+  overflow-y: auto;
 }
 .piece-picker.open { display: flex; }
-.piece-style-option {
+.picker-section { display: flex; flex-direction: column; gap: 4px; }
+.picker-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; padding: 4px 8px; }
+.picker-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 8px 0; }
+.piece-style-option, .piece-color-option {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   border: 2px solid transparent;
+  font-size: 13px;
+  color: var(--text);
 }
-.piece-style-option:hover { background: var(--bg3); }
-.piece-style-option.active { border-color: var(--accent); background: var(--bg3); }
-.style-preview { font-size: 24px; width: 32px; text-align: center; }
-.piece-style-option span { font-size: 14px; font-weight: 500; color: var(--text); }
+.piece-style-option:hover, .piece-color-option:hover { background: var(--bg3); }
+.piece-style-option.active, .piece-color-option.active { border-color: var(--accent); background: var(--bg3); }
+.piece-color-option span {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
 .theme-option {
   width: 48px;
   height: 48px;
@@ -558,21 +569,24 @@ body {
     <button class="btn btn-icon" onclick="toggleTheme()">🌙</button>
   </div>
   <div class="piece-picker" id="piece-picker">
-    <div class="piece-style-option" data-style="classic" title="Classic">
-      <div class="style-preview">♚</div>
-      <span>Classic</span>
+    <div class="picker-section">
+      <div class="picker-label">Style</div>
+      <div class="piece-style-option" data-style="classic">Classic</div>
+      <div class="piece-style-option" data-style="neo">Neo</div>
+      <div class="piece-style-option" data-style="pixel">Pixel</div>
+      <div class="piece-style-option" data-style="minimal">Minimal</div>
     </div>
-    <div class="piece-style-option" data-style="neo" title="Neo">
-      <div class="style-preview">♚</div>
-      <span>Neo</span>
-    </div>
-    <div class="piece-style-option" data-style="pixel" title="Pixel">
-      <div class="style-preview">♚</div>
-      <span>Pixel</span>
-    </div>
-    <div class="piece-style-option" data-style="minimal" title="Minimal">
-      <div class="style-preview">♚</div>
-      <span>Minimal</span>
+    <div class="picker-divider"></div>
+    <div class="picker-section">
+      <div class="picker-label">Colors</div>
+      <div class="piece-color-option" data-colors="classic"><span style="background:#fff"></span><span style="background:#000"></span> Classic</div>
+      <div class="piece-color-option" data-colors="blue_red"><span style="background:#4a90d9"></span><span style="background:#d94a4a"></span> Blue vs Red</div>
+      <div class="piece-color-option" data-colors="green_purple"><span style="background:#4abd4a"></span><span style="background:#9b4abd"></span> Green vs Purple</div>
+      <div class="piece-color-option" data-colors="gold_silver"><span style="background:#ffd700"></span><span style="background:#a0a0a0"></span> Gold vs Silver</div>
+      <div class="piece-color-option" data-colors="cyan_orange"><span style="background:#00d4d4"></span><span style="background:#ff8c00"></span> Cyan vs Orange</div>
+      <div class="piece-color-option" data-colors="pink_teal"><span style="background:#ff69b4"></span><span style="background:#008b8b"></span> Pink vs Teal</div>
+      <div class="piece-color-option" data-colors="ice_fire"><span style="background:#87ceeb"></span><span style="background:#ff4500"></span> Ice vs Fire</div>
+      <div class="piece-color-option" data-colors="neon"><span style="background:#00ff88"></span><span style="background:#ff00ff"></span> Neon</div>
     </div>
   </div>
   <div class="theme-picker" id="theme-picker">
@@ -746,9 +760,38 @@ const PIECE_STYLES = {
 
 var currentPieceStyle = localStorage.getItem('rfchess-piece-style') || 'classic';
 
-// Function to get piece HTML
+// Piece color schemes
+const PIECE_COLORS = {
+  classic: { white: '#ffffff', black: '#000000', name: 'Classic' },
+  blue_red: { white: '#4a90d9', black: '#d94a4a', name: 'Blue vs Red' },
+  green_purple: { white: '#4abd4a', black: '#9b4abd', name: 'Green vs Purple' },
+  gold_silver: { white: '#ffd700', black: '#a0a0a0', name: 'Gold vs Silver' },
+  cyan_orange: { white: '#00d4d4', black: '#ff8c00', name: 'Cyan vs Orange' },
+  pink_teal: { white: '#ff69b4', black: '#008b8b', name: 'Pink vs Teal' },
+  ice_fire: { white: '#87ceeb', black: '#ff4500', name: 'Ice vs Fire' },
+  neon: { white: '#00ff88', black: '#ff00ff', name: 'Neon' }
+};
+var currentPieceColors = localStorage.getItem('rfchess-piece-colors') || 'classic';
+
+// Function to get piece HTML with custom colors
 function getPieceHTML(piece) {
-  return PIECE_STYLES[currentPieceStyle][piece] || PIECE_STYLES.classic[piece] || '';
+  let svg = PIECE_STYLES[currentPieceStyle][piece] || PIECE_STYLES.classic[piece] || '';
+  
+  // Apply custom colors
+  const colors = PIECE_COLORS[currentPieceColors] || PIECE_COLORS.classic;
+  const isWhitePiece = piece === piece.toUpperCase();
+  
+  if (isWhitePiece) {
+    // White pieces: replace #fff with white color, keep #000 stroke for contrast
+    svg = svg.replace(/fill="#fff"/g, `fill="${colors.white}"`);
+    svg = svg.replace(/fill="#ffffff"/gi, `fill="${colors.white}"`);
+  } else {
+    // Black pieces: replace #000 fill with black color
+    svg = svg.replace(/fill="#000"/g, `fill="${colors.black}"`);
+    svg = svg.replace(/fill="#000000"/gi, `fill="${colors.black}"`);
+  }
+  
+  return svg;
 }
 
 const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -1506,7 +1549,15 @@ function setPieceStyle(style) {
   document.querySelectorAll('.piece-style-option').forEach(opt => {
     opt.classList.toggle('active', opt.dataset.style === style);
   });
-  document.getElementById('piece-picker').classList.remove('open');
+  render();
+}
+
+function setPieceColors(colors) {
+  currentPieceColors = colors;
+  localStorage.setItem('rfchess-piece-colors', colors);
+  document.querySelectorAll('.piece-color-option').forEach(opt => {
+    opt.classList.toggle('active', opt.dataset.colors === colors);
+  });
   render();
 }
 
@@ -1514,6 +1565,10 @@ function setPieceStyle(style) {
 document.querySelectorAll('.piece-style-option').forEach(opt => {
   opt.addEventListener('click', () => setPieceStyle(opt.dataset.style));
   opt.classList.toggle('active', opt.dataset.style === currentPieceStyle);
+});
+document.querySelectorAll('.piece-color-option').forEach(opt => {
+  opt.addEventListener('click', () => setPieceColors(opt.dataset.colors));
+  opt.classList.toggle('active', opt.dataset.colors === currentPieceColors);
 });
 
 function setBoardTheme(theme) {
